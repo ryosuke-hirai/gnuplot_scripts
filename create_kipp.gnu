@@ -1,6 +1,6 @@
 reset
 yaxis=1 # 1 for mass coordinate, anything else for radius
-xaxis=3 # 1 for Model Number, 2 for Linear time, else for Time to CC (log)
+xaxis=2 # 1 for Model Number, 2 for Linear time, else for Time to CC (log)
 filename='history.data'
 
 # set colour palette
@@ -34,6 +34,8 @@ if (xaxis==1){
     xlabel='model_number'
     xfunc(t)=t
 
+    print "Using 'model_number' as x-axis"
+
 } else {
     stats hisfile u (column('star_age')):($0) nooutput
     age=STATS_max_x
@@ -45,6 +47,8 @@ if (xaxis==1){
 	xlabel='star_age'
 	xfunc(t)=t/1e6
 
+	print "Using 'star_age' as x-axis"
+
     } else {
 	tailhisfile=sprintf("<awk 'NR==6; {buffer[NR%%3]=$0} END{print buffer[(NR+1)%%3]; print buffer[(NR+2)%%3]}' %s",filename)
 	STATS_min_y=-99
@@ -52,10 +56,13 @@ if (xaxis==1){
 	mindt=log10(STATS_max_x-STATS_min_x)
 
 	set xr [log10(age-start):mindt]
-	set xl 'Time to CC [yr]'
+	set xl 'Time to end [yr]'
 	set form x '$10^{%g}$'
 	xlabel='star_age'
 	xfunc(t)=(t<age?log10(age-t):1/0)
+
+	print "Using 'Time to end' as x-axis"
+	
     }
 }
 
@@ -82,6 +89,8 @@ if (yaxis==1) {
     upper(x)=x
     upperlbl='star_mass'
 
+    print "Using 'mass coordinate' as y-axis"
+
 } else {
     ### Radius Kippenhahn diagram ###
     STATS_min_y=-99
@@ -89,6 +98,7 @@ if (yaxis==1) {
     if (STATS_min_y>-50) {
 	radius(x)=10**x
 	rad='log_R'
+	print "Using 'radius' as y-axis"
     } else {
 	stats [0:1e99] shorthisfile u ($0):(column('radius')) nooutput
 	if (STATS_min_y>-50) {
@@ -141,6 +151,8 @@ do for [i=1:1000]{
     }
 }
 
+print "Maximum number of convective zones is iconvmax=",iconvmax
+
 # Count number of burning zones in file
 iburnmax=0
 do for [i=1:1000]{
@@ -152,6 +164,18 @@ do for [i=1:1000]{
 	break
     }
 }
+
+print "Maximum number of burning zones is iburnmax=",iburnmax
+
+# Check if core masses/radii are outputted
+cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",he_core,filename)
+ihecore=system(cmd)
+cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",co_core,filename)
+icocore=system(cmd)
+cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",one_core,filename)
+ionecore=system(cmd)
+cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",fe_core,filename)
+ifecore=system(cmd)
 
 # Start plotting --------------------------------------------------------------
 
@@ -166,10 +190,10 @@ do for [i=1:1000]{
        (column(burnqtop(i))<=1.?column(burnqtop(i))*upper(column(upperlbl)):1/0):\
        (column(burntype(i))>-100?column(burntype(i)):0) w boxes fc pal not,\
        '' u (xfunc(column(xlabel))):(upper(column(upperlbl))) w l lw 3 lc rgb 'black' not,\
-       '' u (xfunc(column(xlabel))):(column(he_core)) w l lw 4 lc rgb 'forest-green' not,\
-       '' u (xfunc(column(xlabel))):(column(co_core)) w l lw 4 lc rgb 'blue' not,\
-       '' u (xfunc(column(xlabel))):(column(one_core)) w l lw 4 lc rgb 'red' not,\
-       '' u (xfunc(column(xlabel))):(column(fe_core)) w l lw 4 lc rgb 'brown' not
+       '' u (xfunc(column(xlabel))):(ihecore==1?column(he_core):NaN) w l lw 4 lc rgb 'forest-green' not,\
+       '' u (xfunc(column(xlabel))):(icocore==1?column(co_core):NaN) w l lw 4 lc rgb 'blue' not,\
+       '' u (xfunc(column(xlabel))):(ionecore==1?column(one_core):NaN) w l lw 4 lc rgb 'red' not,\
+       '' u (xfunc(column(xlabel))):(ifecore==1?column(fe_core):NaN) w l lw 4 lc rgb 'brown' not
     
 # Convection zones
     set out 'kipp.tex'
@@ -189,5 +213,7 @@ system('convert kipppng-1.png -transparent white -channel Alpha -evaluate Divide
 system('convert burnpng-1.png kipptrans.png -composite -format png hoge.png')
 system('convert hoge.png -transparent white burn-inc.png')
 system('convert burn-inc.png -format pdf burn-inc.pdf')
-system('pdflatex burn.tex && mv burn.pdf kippdiagram.pdf')
-system('rm burn* *-inc* kipp*png hoge* *tex')
+system('pdflatex -interaction=nonstopmode burn.tex > /dev/null && mv burn.pdf kippdiagram.pdf')
+system('rm -f burn* *-inc* kipp*png hoge* *tex')
+
+print "Outputted kippdiagram.pdf"
