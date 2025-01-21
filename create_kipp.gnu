@@ -1,7 +1,8 @@
 reset
 yaxis=1 # 1 for mass coordinate, anything else for radius
 xaxis=2 # 1 for Model Number, 2 for Linear time, else for Time to CC (log)
-filename='history.data'
+filename='history.data' # Input history file name
+outfile='kippdiagram.pdf' # Name of output pdf file
 
 # set colour palette
 convcolor='green'
@@ -11,6 +12,7 @@ thercolor='grey'
 
 # Preamble
 hisfile=sprintf('<tail -n +6 %s',filename)
+print "Reading file: ",filename
 
 rsun=6.96e10
 
@@ -179,7 +181,7 @@ ifecore=system(cmd)
 
 # Start plotting --------------------------------------------------------------
 
-    
+print "Plotting..."
 # Burning
     unset colorbox
     set out 'burn.tex'
@@ -213,7 +215,8 @@ system('convert kipppng-1.png -transparent white -channel Alpha -evaluate Divide
 system('convert burnpng-1.png kipptrans.png -composite -format png hoge.png')
 system('convert hoge.png -transparent white burn-inc.png')
 system('convert burn-inc.png -format pdf burn-inc.pdf')
+print "Adding axis labels with latex..."
 system('pdflatex -interaction=nonstopmode burn.tex > /dev/null && mv burn.pdf kippdiagram.pdf')
 system('rm -f burn* *-inc* kipp*png hoge* *tex')
-
-print "Outputted kippdiagram.pdf"
+system(sprintf('mv tempfile.pdf %s 2>/dev/null',outfile))
+print "Outputted ",outfile
