@@ -1,14 +1,21 @@
-reset
+# Script for creating Kippenhahn diagrams
+
+#  Prerequisites: pdflatex, ImageMagick, gnuplot
+
+# Settings:
 yaxis=1 # 1 for mass coordinate, anything else for radius
-xaxis=2 # 1 for Model Number, 2 for Linear time, else for Time to CC (log)
+xaxis=3 # 1 for Model Number, 2 for Linear time, else for Time to CC (log)
 filename='history.data' # Input history file name
 outfile='kippdiagram.pdf' # Name of output pdf file
 
+
+# ===========================================================================
+reset
 # set colour palette
-convcolor='green'
-overcolor='yellow'
-semicolor='purple'
-thercolor='grey'
+convcolor='green'  # convection zone
+overcolor='yellow' # overshoot
+semicolor='purple' # semiconvection zone
+thercolor='grey'   # thermohaline mixing
 
 # Preamble
 hisfile=sprintf('<tail -n +6 %s',filename)
@@ -52,10 +59,10 @@ if (xaxis==1){
 	print "Using 'star_age' as x-axis"
 
     } else {
-	tailhisfile=sprintf("<awk 'NR==6; {buffer[NR%%3]=$0} END{print buffer[(NR+1)%%3]; print buffer[(NR+2)%%3]}' %s",filename)
+	tailhisfile=sprintf("<awk 'NR==6; {buffer[NR%%3]=$0} END{print buffer[(NR+1)%%3]; print buffer[(NR+2)%%3]; print buffer[(NR+3)%%3]}' %s",filename)
 	STATS_min_y=-99
 	stats tailhisfile u (column('star_age')):($0) nooutput
-	mindt=log10(STATS_max_x-STATS_min_x)
+	mindt=log10((STATS_max_x-STATS_min_x)/2.)
 
 	set xr [log10(age-start):mindt]
 	set xl 'Time to end [yr]'
@@ -140,13 +147,13 @@ if (yaxis==1) {
 
 }
 
+colexist(col,file) = sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",col,file) # command to tell if a column exists
+
 # Count number of convective zones in file
 
 iconvmax=0
 do for [i=1:1000]{
-    STATS_max_y=-99
-    cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",convqtop(i),filename)
-    iconv=system(cmd)
+    iconv=system(colexist(convqtop(i),filename))
     if (iconv>1){
 	iconvmax=i-1
 	break
@@ -158,9 +165,7 @@ print "Maximum number of convective zones is iconvmax=",iconvmax
 # Count number of burning zones in file
 iburnmax=0
 do for [i=1:1000]{
-    STATS_max_y=-99
-    cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",burnqtop(i),filename)
-    iburn=system(cmd)
+    iburn=system(colexist(burnqtop(i),filename))
     if (iburn>1){
 	iburnmax=i-1
 	break
@@ -170,14 +175,10 @@ do for [i=1:1000]{
 print "Maximum number of burning zones is iburnmax=",iburnmax
 
 # Check if core masses/radii are outputted
-cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",he_core,filename)
-ihecore=system(cmd)
-cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",co_core,filename)
-icocore=system(cmd)
-cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",one_core,filename)
-ionecore=system(cmd)
-cmd=sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",fe_core,filename)
-ifecore=system(cmd)
+ihecore =system(colexist(he_core,filename))
+icocore =system(colexist(co_core,filename))
+ionecore=system(colexist(one_core,filename))
+ifecore =system(colexist(fe_core,filename))
 
 # Start plotting --------------------------------------------------------------
 
