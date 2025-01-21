@@ -21,7 +21,7 @@ set term cairolatex standalone pdf size 8.in,5 font 'Times-Roman,12'
 set style fill solid
 set tics front
 set linetype 1 lc rgb convcolor # convection zone
-set linetype 2 lc rgb overcolor# overshoot
+set linetype 2 lc rgb overcolor # overshoot
 set linetype 3 lc rgb semicolor # semiconvection zone
 set linetype 4 lc rgb thercolor # thermohaline mixing
 
