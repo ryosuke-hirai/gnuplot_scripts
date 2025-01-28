@@ -1,4 +1,4 @@
-# Script for creating Kippenhahn diagrams
+# Script for creating Kippenhahn diagrams from a MESA history file
 
 # Owned by: Ryosuke Hirai
 
@@ -8,9 +8,16 @@
 #  Linux example) $ sudo dnf install ImageMagick gnuplot poppler-utils
 #  MacOS example) $ brew install imagemagick gnuplot poppler
 
+# Required columns in the history file
+# 1. 'mass' for mass Kippenhahn diagram
+#    'log_R' or 'radius' or 'radius_cm' for radius Kippenhahn diagram
+# 2. 'burning_regions <integer>' or 'burn_relr_regions <integer>'
+# 3. 'mixing_regions <integer>' or 'mix_relr_regions <integer>'
+# 4. (optional) 'he_core_mass' or 'he_core_radius' and similar for co_core, one_core, fe_core
+
 # Settings ===================================================================
-yaxis=2 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
-xaxis=1 # 1 for Model Number, 2 for Linear time, 3 for log time, else for Time to end (log)
+yaxis=1 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
+xaxis=2 # 1 for Model Number, 2 for Linear time, 3 for log time, else for Time to end (log)
 filename='history.data' # Input history file name
 outfile='kippdiagram.pdf' # Name of output pdf file
 
@@ -37,8 +44,7 @@ hisfile=sprintf('<tail -n +6 %s',filename)
 print "Reading file: ",filename
 
 rsun=6.96e10
-
-set term cairolatex standalone pdf size 8.in,5 font 'Times-Roman,12'
+colexist(col,file) = sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",col,file) # command to tell if a column exists
 
 set style fill solid
 set tics front
@@ -127,20 +133,21 @@ if (yaxis==1) {
 
 } else {
     ### Radius Kippenhahn diagram ###
-    STATS_min_y=-99
-    stats [0:1e99] shorthisfile u ($0):(column('log_R')) nooutput
-    if (STATS_min_y>-50) {
+#    STATS_min_y=-99
+    #    stats [0:1e99] shorthisfile u ($0):(column('log_R')) nooutput
+    logr_exist=system(colexist('log_R',filename))
+    if (logr_exist==1) {
 	radius(x)=10**x
 	rad='log_R'
 	print "Using 'radius' as y-axis"
     } else {
-	stats [0:1e99] shorthisfile u ($0):(column('radius')) nooutput
-	if (STATS_min_y>-50) {
+	rad_exist=system(colexist('radius',filename))
+	if (rad_exist) {
 	    radius(x)=x
 	    rad='radius'
 	} else {
-	    stats [0:1e99] shorthisfile u ($0):(column('radius_cm')) nooutput
-	    if (STATS_min_y>-50) {
+	    rcm_exist=system(colexist('radius',filename))
+	    if (rcm_exist) {
 		radius(x) = x/rsun
 		rad='radius_cm'
 	    } else {
@@ -149,6 +156,7 @@ if (yaxis==1) {
 	    }
 	}
     }
+    print "Using 'radius' as y-axis"
     stats [0:1e99] hisfile u ($0):(radius(column(rad))) nooutput
     maxrad=STATS_max_y
 
@@ -173,8 +181,6 @@ if (yaxis==1) {
     upperlbl=rad
 
 }
-
-colexist(col,file) = sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",col,file) # command to tell if a column exists
 
 # Count number of convective zones in file
 
@@ -211,19 +217,29 @@ ifecore =system(colexist(fe_core,filename))
 
 print "Plotting burning/cooling zones..."
 # Burning
-    unset colorbox
-    set out 'burn.tex'
-    set pal defined (-15 'blue',0 'white',15 'red')
-    set cbr [-20:20]
-    pl for [i=iburnmax:1:-1] hisfile \
-       u (xfunc(column(xlabel))):\
-       (column(burnqtop(i))<=1.?column(burnqtop(i))*upper(column(upperlbl)):1/0):\
-       (column(burntype(i))>-100?column(burntype(i)):0) w boxes fc pal not,\
-       '' u (xfunc(column(xlabel))):(upper(column(upperlbl))) w l lw 3 lc rgb 'black' not,\
-       '' u (xfunc(column(xlabel))):(ihecore==1?column(he_core):NaN) w l lw 4 lc rgb 'forest-green' not,\
-       '' u (xfunc(column(xlabel))):(icocore==1?column(co_core):NaN) w l lw 4 lc rgb 'blue' not,\
-       '' u (xfunc(column(xlabel))):(ionecore==1?column(one_core):NaN) w l lw 4 lc rgb 'red' not,\
-       '' u (xfunc(column(xlabel))):(ifecore==1?column(fe_core):NaN) w l lw 4 lc rgb 'brown' not
+unset colorbox
+
+# Find maximum burning rate
+maxburnrate=0
+do for [i=1:iburnmax] {
+    stats [*:*][*:*] hisfile u 0:(column(burntype(i))>-100?abs(column(burntype(i))):0) nooutput
+    maxburnrate=(maxburnrate>STATS_max_y?maxburnrate:STATS_max_y)
+}
+
+set term cairolatex standalone pdf size 8.in,5 font 'Times-Roman,12'
+set out 'burn.tex'
+
+set pal defined (-maxburnrate 'blue',0 'white',maxburnrate 'red')
+set cbr [-maxburnrate:maxburnrate]
+pl for [i=iburnmax:1:-1] hisfile \
+   u (xfunc(column(xlabel))):\
+   (column(burnqtop(i))<=1.?column(burnqtop(i))*upper(column(upperlbl)):1/0):\
+   (column(burntype(i))>-100?column(burntype(i)):0) w boxes fc pal not,\
+   '' u (xfunc(column(xlabel))):(upper(column(upperlbl))) w l lw 3 lc rgb 'black' not,\
+   '' u (xfunc(column(xlabel))):(ihecore==1?column(he_core):NaN) w l lw 4 lc rgb 'forest-green' not,\
+   '' u (xfunc(column(xlabel))):(icocore==1?column(co_core):NaN) w l lw 4 lc rgb 'blue' not,\
+   '' u (xfunc(column(xlabel))):(ionecore==1?column(one_core):NaN) w l lw 4 lc rgb 'red' not,\
+   '' u (xfunc(column(xlabel))):(ifecore==1?column(fe_core):NaN) w l lw 4 lc rgb 'brown' not
 
 print "Plotting mixing zones..."
 # Convection zones
