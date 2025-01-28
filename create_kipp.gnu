@@ -16,19 +16,19 @@
 # 4. (optional) 'he_core_mass' or 'he_core_radius' and similar for co_core, one_core, fe_core
 
 # Settings ===================================================================
-yaxis=1 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
-xaxis=2 # 1 for Model Number, 2 for Linear time, 3 for log time, else for Time to end (log)
+yaxis=2 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
+xaxis=1 # 1 for Model Number, 2 for Linear time, 3 for log time, else for Time to end (log)
 filename='history.data' # Input history file name
 outfile='kippdiagram.pdf' # Name of output pdf file
 
 age_units=2 # 1 for yr, 2 for Myr (only used when xaxis=2)
 minrad=1e-3 # Minimum radius in units of Rsun for radius Kipp diagram (only used when yaxis=2)
-marginfrac=1.03 # How much margin to leave above the stellar mass/radius
 magick='convert' # 'convert' for ImageMagick v6, 'magick' for v7
 
 # Plot ranges (negative for default)
 leftbound=-1  # left bound for xaxis
 rightbound=-1 # right bound for xaxis
+marginfrac=1.03 # How much margin to leave above the stellar mass/radius. For example, marginfrac=1.03 means it will extend the yaxis upper limit by 3% from the maximum mass
 
 # set colour palette
 convcolor='green'  # convection zone
@@ -44,7 +44,7 @@ hisfile=sprintf('<tail -n +6 %s',filename)
 print "Reading file: ",filename
 
 rsun=6.96e10
-colexist(col,file) = sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",col,file) # command to tell if a column exists
+colexist(col,file) = system(sprintf("if grep -q %s %s; then echo '1';else  echo '2';fi",col,file)) # command to tell if a column exists. Returns 1 if it exists and 2 if not
 
 set style fill solid
 set tics front
@@ -135,18 +135,18 @@ if (yaxis==1) {
     ### Radius Kippenhahn diagram ###
 #    STATS_min_y=-99
     #    stats [0:1e99] shorthisfile u ($0):(column('log_R')) nooutput
-    logr_exist=system(colexist('log_R',filename))
+    logr_exist=colexist('log_R',filename)
     if (logr_exist==1) {
 	radius(x)=10**x
 	rad='log_R'
 	print "Using 'radius' as y-axis"
     } else {
-	rad_exist=system(colexist('radius',filename))
+	rad_exist=colexist('radius',filename)
 	if (rad_exist) {
 	    radius(x)=x
 	    rad='radius'
 	} else {
-	    rcm_exist=system(colexist('radius',filename))
+	    rcm_exist=colexist('radius',filename)
 	    if (rcm_exist) {
 		radius(x) = x/rsun
 		rad='radius_cm'
@@ -186,7 +186,7 @@ if (yaxis==1) {
 
 iconvmax=0
 do for [i=1:1000]{
-    iconv=system(colexist(convqtop(i),filename))
+    iconv=colexist(convqtop(i),filename)
     if (iconv>1){
 	iconvmax=i-1
 	break
@@ -198,7 +198,7 @@ print "Maximum number of convective zones is iconvmax=",iconvmax
 # Count number of burning zones in file
 iburnmax=0
 do for [i=1:1000]{
-    iburn=system(colexist(burnqtop(i),filename))
+    iburn=colexist(burnqtop(i),filename)
     if (iburn>1){
 	iburnmax=i-1
 	break
@@ -208,10 +208,10 @@ do for [i=1:1000]{
 print "Maximum number of burning zones is iburnmax=",iburnmax
 
 # Check if core masses/radii are outputted
-ihecore =system(colexist(he_core,filename))
-icocore =system(colexist(co_core,filename))
-ionecore=system(colexist(one_core,filename))
-ifecore =system(colexist(fe_core,filename))
+ihecore =colexist(he_core,filename)
+icocore =colexist(co_core,filename)
+ionecore=colexist(one_core,filename)
+ifecore =colexist(fe_core,filename)
 
 # Start plotting --------------------------------------------------------------
 
