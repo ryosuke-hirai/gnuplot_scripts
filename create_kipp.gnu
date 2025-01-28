@@ -1,21 +1,36 @@
 # Script for creating Kippenhahn diagrams
 
-#  Prerequisites: pdflatex, ImageMagick, gnuplot
+# Owned by: Ryosuke Hirai
 
-# Settings:
-yaxis=1 # 1 for mass coordinate, anything else for radius
-xaxis=3 # 1 for Model Number, 2 for Linear time, else for Time to CC (log)
+# Prerequisites: pdflatex, ImageMagick, gnuplot, pdftoppm
+
+#  Most prerequisites can be installed via standard repositories
+#  Linux example) $ sudo dnf install ImageMagick gnuplot poppler-utils
+#  MacOS example) $ brew install imagemagick gnuplot poppler
+
+# Settings ===================================================================
+yaxis=2 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
+xaxis=1 # 1 for Model Number, 2 for Linear time, 3 for log time, else for Time to end (log)
 filename='history.data' # Input history file name
 outfile='kippdiagram.pdf' # Name of output pdf file
 
+age_units=2 # 1 for yr, 2 for Myr (only used when xaxis=2)
+minrad=1e-3 # Minimum radius in units of Rsun for radius Kipp diagram (only used when yaxis=2)
+marginfrac=1.03 # How much margin to leave above the stellar mass/radius
+magick='convert' # 'convert' for ImageMagick v6, 'magick' for v7
 
-# ===========================================================================
-reset
+# Plot ranges (negative for default)
+leftbound=-1  # left bound for xaxis
+rightbound=-1 # right bound for xaxis
+
 # set colour palette
 convcolor='green'  # convection zone
 overcolor='yellow' # overshoot
 semicolor='purple' # semiconvection zone
 thercolor='grey'   # thermohaline mixing
+
+# ===========================================================================
+reset
 
 # Preamble
 hisfile=sprintf('<tail -n +6 %s',filename)
@@ -35,11 +50,10 @@ set linetype 4 lc rgb thercolor # thermohaline mixing
 # Set horizontal axis
 if (xaxis==1){
     stats hisfile u (column('model_number')):($0) nooutput
-    lastmodel=STATS_max_x
-    firstmodel=STATS_min_x
-    set xr [firstmodel:lastmodel]
+    if( leftbound<0 ) { leftbound =STATS_min_x }
+    if(rightbound<0 ) { rightbound=STATS_max_x }
+    set xr [leftbound:rightbound]
     set xl 'Model Number'
-    set form x '{%g}'
     xlabel='model_number'
     xfunc(t)=t
 
@@ -47,14 +61,25 @@ if (xaxis==1){
 
 } else {
     stats hisfile u (column('star_age')):($0) nooutput
-    age=STATS_max_x
-    start=STATS_min_x
-    if (xaxis==2){
-	set xr [start/1e6:age/1e6]
-	set xl 'Age [Myr]'
-	set form x '{%g}'
+    if( leftbound<0 ) { leftbound =STATS_min_x }
+    if(rightbound<0 ) { rightbound=STATS_max_x }
+
+    # Set age units
+    if (age_units==1) {
+	ageunit=1
+	ageunitlabel='yr'
+    } else {
+	ageunit=1e6
+	ageunitlabel='Myr'
+    }
+
+    if (xaxis==2||xaxis==3){
+	set xr [leftbound/ageunit:rightbound/ageunit]
+	set xl sprintf('Age [%s]',ageunitlabel)
 	xlabel='star_age'
 	xfunc(t)=t/1e6
+
+	if(xaxis==3){set log x;set form x '$10^{%g}$'}
 
 	print "Using 'star_age' as x-axis"
 
@@ -64,11 +89,11 @@ if (xaxis==1){
 	stats tailhisfile u (column('star_age')):($0) nooutput
 	mindt=log10((STATS_max_x-STATS_min_x)/2.)
 
-	set xr [log10(age-start):mindt]
+	set xr [log10(rightbound-leftbound):mindt]
 	set xl 'Time to end [yr]'
 	set form x '$10^{%g}$'
 	xlabel='star_age'
-	xfunc(t)=(t<age?log10(age-t):1/0)
+	xfunc(t)=(t<rightbound?log10(rightbound-t):1/0)
 
 	print "Using 'Time to end' as x-axis"
 	
@@ -82,7 +107,7 @@ if (yaxis==1) {
     ### Mass Kippenhahn diagram ###
     stats [0:1e99] hisfile u ($0):(column('star_mass')) nooutput
     mass=STATS_max_y
-    set yr [0:mass]
+    set yr [0:mass*marginfrac]
     set yl 'Mass [M$_\odot$]'
 
     convqtop(i)=sprintf('mix_qtop_%d',i)
@@ -127,10 +152,12 @@ if (yaxis==1) {
     stats [0:1e99] hisfile u ($0):(radius(column(rad))) nooutput
     maxrad=STATS_max_y
 
-    set yr [1e-3:maxrad]
+    set yr [minrad:maxrad*marginfrac]
     set yl 'Radius [R$_\odot$]'
-    set form y '$10^{%L}$'
-    set log y
+    if( yaxis==2 ) {
+	set log y
+	set form y '$10^{%L}$'
+    }
 
     convqtop(i)=sprintf('mix_relr_top_%d',i)
     convtype(i)=sprintf('mix_relr_type_%d',i)
@@ -182,7 +209,7 @@ ifecore =system(colexist(fe_core,filename))
 
 # Start plotting --------------------------------------------------------------
 
-print "Plotting..."
+print "Plotting burning/cooling zones..."
 # Burning
     unset colorbox
     set out 'burn.tex'
@@ -197,7 +224,8 @@ print "Plotting..."
        '' u (xfunc(column(xlabel))):(icocore==1?column(co_core):NaN) w l lw 4 lc rgb 'blue' not,\
        '' u (xfunc(column(xlabel))):(ionecore==1?column(one_core):NaN) w l lw 4 lc rgb 'red' not,\
        '' u (xfunc(column(xlabel))):(ifecore==1?column(fe_core):NaN) w l lw 4 lc rgb 'brown' not
-    
+
+print "Plotting mixing zones..."
 # Convection zones
     set out 'kipp.tex'
     set pal defined (0 'white',1 convcolor,2 overcolor,3 semicolor,4 thercolor)
@@ -212,12 +240,13 @@ print "Plotting..."
 set out
 system('pdftoppm burn-inc.pdf burnpng -png')
 system('pdftoppm kipp-inc.pdf kipppng -png')
-system('convert kipppng-1.png -transparent white -channel Alpha -evaluate Divide 4 kipptrans.png')
-system('convert burnpng-1.png kipptrans.png -composite -format png hoge.png')
-system('convert hoge.png -transparent white burn-inc.png')
-system('convert burn-inc.png -format pdf burn-inc.pdf')
+system(sprintf('%s kipppng-1.png -transparent white -channel Alpha -evaluate Divide 4 kipptrans.png',magick))
+system(sprintf('%s burnpng-1.png kipptrans.png -composite -format png hoge.png',magick))
+system(sprintf('%s hoge.png -transparent white burn-inc.png',magick))
+system(sprintf('%s burn-inc.png -format pdf burn-inc.pdf',magick))
 print "Adding axis labels with latex..."
-system('pdflatex -interaction=nonstopmode burn.tex > /dev/null && mv burn.pdf kippdiagram.pdf')
+system('pdflatex -interaction=nonstopmode burn.tex > /dev/null && mv burn.pdf tempfile.pdf')
 system('rm -f burn* *-inc* kipp*png hoge* *tex')
 system(sprintf('mv tempfile.pdf %s 2>/dev/null',outfile))
+
 print "Outputted ",outfile
