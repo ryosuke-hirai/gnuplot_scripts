@@ -16,18 +16,18 @@
 # 4. (optional) 'he_core_mass' or 'he_core_radius' and similar for co_core, one_core, fe_core
 
 # Settings ===================================================================
-yaxis=2 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
+yaxis=1 # 1 for mass coordinate, 2 for log radius, anything else for linear radius
 xaxis=1 # 1 for Model Number, 2 for Linear time, 3 for log time, else for Time to end (log)
 filename='history.data' # Input history file name
 outfile='kippdiagram.pdf' # Name of output pdf file
 
-age_units=2 # 1 for yr, 2 for Myr (only used when xaxis=2)
-minrad=1e-3 # Minimum radius in units of Rsun for radius Kipp diagram (only used when yaxis=2)
+age_units=2 # 1 for yr, 2 for Myr (only relevant for xaxis=2)
 magick='convert' # 'convert' for ImageMagick v6, 'magick' for v7
 
 # Plot ranges (negative for default)
 leftbound=-1  # left bound for xaxis
 rightbound=-1 # right bound for xaxis
+minrad=1e-3 # Minimum radius in units of Rsun for radius Kipp diagram (only relevant for yaxis=2)
 marginfrac=1.03 # How much margin to leave above the stellar mass/radius. For example, marginfrac=1.03 means it will extend the yaxis upper limit by 3% from the maximum mass
 
 # set colour palette
@@ -152,10 +152,11 @@ if (yaxis==1) {
 		rad='radius_cm'
 	    } else {
 		print 'Radius coordinate not found'
-		pause -1
+		exit
 	    }
 	}
     }
+
     print "Using 'radius' as y-axis"
     stats [0:1e99] hisfile u ($0):(radius(column(rad))) nooutput
     maxrad=STATS_max_y
